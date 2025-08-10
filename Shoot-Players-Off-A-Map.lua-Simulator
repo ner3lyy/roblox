@@ -1,0 +1,330 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local head = character:WaitForChild("Head")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+local humanoid = character:WaitForChild("Humanoid")
+
+-- GUI setup
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "OverHeadGUI"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 450, 0, 100)  -- увеличил ширину чтобы поместилась 3 кнопка
+frame.BackgroundColor3 = Color3.new(0, 0, 0)
+frame.BackgroundTransparency = 0.5
+frame.AnchorPoint = Vector2.new(0.5, 1)
+frame.Position = UDim2.new(0.5, 0, 0, 0)
+frame.Parent = screenGui
+frame.Visible = false
+
+-- Заголовок сверху
+local titleTop = Instance.new("TextLabel")
+titleTop.Size = UDim2.new(1, 0, 0, 25)
+titleTop.Position = UDim2.new(0, 0, 0, 0)
+titleTop.BackgroundTransparency = 1
+titleTop.Text = "Shoot Players Off A Map Simulator GUI"
+titleTop.TextColor3 = Color3.new(1, 1, 1)
+titleTop.Font = Enum.Font.SourceSansBold
+titleTop.TextSize = 20
+titleTop.Parent = frame
+
+-- Кнопки
+local function createButton(text, posX)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 140, 0, 50)
+    btn.Position = UDim2.new(0, posX, 0, 30)
+    btn.Text = text
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 24
+    btn.Parent = frame
+    return btn
+end
+
+local btnBhop = createButton("Банихоп + спин", 5)
+local btnAntiRagdoll = createButton("Антирагдолл", 155)
+local btnESP = createButton("ESP", 305)
+
+-- Подпись снизу
+local titleBottom = Instance.new("TextLabel")
+titleBottom.Size = UDim2.new(1, 0, 0, 20)
+titleBottom.Position = UDim2.new(0, 0, 0, 85)
+titleBottom.BackgroundTransparency = 1
+titleBottom.Text = "made by @entvahhen"
+titleBottom.TextColor3 = Color3.new(1, 1, 1)
+titleBottom.Font = Enum.Font.SourceSans
+titleBottom.TextSize = 14
+titleBottom.Parent = frame
+
+-- Обновление позиции GUI над головой
+local function updatePosition()
+    if head and head.Parent then
+        local headPos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(head.Position + Vector3.new(0, 1.5, 0))
+        if onScreen then
+            frame.Position = UDim2.new(0, headPos.X - frame.Size.X.Offset/2, 0, headPos.Y)
+            frame.Visible = frame.Visible
+        else
+            frame.Visible = false
+        end
+    else
+        frame.Visible = false
+    end
+end
+
+-- Показ/скрытие GUI по клавише R и включение банихопа по F
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.R then
+        frame.Visible = not frame.Visible
+    elseif input.KeyCode == Enum.KeyCode.F then
+        -- Переключаем банихоп
+        isBhopActive = not isBhopActive
+        if isBhopActive then
+            startBhop()
+            btnBhop.Text = "Банихоп Вкл"
+        else
+            stopBhop()
+            btnBhop.Text = "Банихоп + спин"
+        end
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if frame.Visible then
+        updatePosition()
+    end
+end)
+
+-- Банихоп + спин
+
+local isBhopActive = false
+local SPEED = 70
+local JUMP_COOLDOWN = 0.4
+local SPIN_SPEED = 30 -- градусов в кадр
+
+local lastJumpTime = 0
+local currentYRotation = 0
+
+local bhopConnection = nil
+
+local function startBhop()
+    humanoid.AutoRotate = false
+    humanoid.WalkSpeed = SPEED
+    lastJumpTime = 0
+    currentYRotation = 0
+
+    bhopConnection = RunService.RenderStepped:Connect(function(dt)
+        local moveDir = humanoid.MoveDirection
+        if moveDir.Magnitude > 0 then
+            if tick() - lastJumpTime > JUMP_COOLDOWN and humanoid.FloorMaterial ~= Enum.Material.Air then
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                lastJumpTime = tick()
+            end
+        end
+        currentYRotation = currentYRotation + math.rad(SPIN_SPEED)
+        local lookDirection = moveDir.Magnitude > 0 and moveDir or rootPart.CFrame.LookVector
+        local lookCFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + lookDirection)
+        local spinRotation = CFrame.Angles(0, currentYRotation, 0)
+        rootPart.CFrame = lookCFrame * spinRotation
+    end)
+end
+
+local function stopBhop()
+    if bhopConnection then
+        bhopConnection:Disconnect()
+        bhopConnection = nil
+    end
+    humanoid.AutoRotate = true
+    humanoid.WalkSpeed = 16 -- стандартная скорость
+end
+
+btnBhop.MouseButton1Click:Connect(function()
+    isBhopActive = not isBhopActive
+    if isBhopActive then
+        startBhop()
+        btnBhop.Text = "Банихоп Вкл"
+    else
+        stopBhop()
+        btnBhop.Text = "Банихоп + спин"
+    end
+end)
+
+-- Антирагдолл
+
+local isAntiRagdollActive = false
+
+local function fixRagdoll()
+    for _, part in pairs(character:GetChildren()) do
+        if part:IsA("BasePart") then
+            for _, obj in pairs(part:GetChildren()) do
+                if obj:IsA("BodyVelocity") or obj:IsA("BodyAngularVelocity") or obj:IsA("BodyForce") or obj:IsA("BodyPosition") then
+                    obj:Destroy()
+                end
+            end
+        end
+    end
+end
+
+local function onStateChanged(oldState, newState)
+    if isAntiRagdollActive then
+        if newState == Enum.HumanoidStateType.Ragdoll or newState == Enum.HumanoidStateType.FallingDown then
+            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+            fixRagdoll()
+        end
+    end
+end
+
+local stateChangedConnection = nil
+local fixRagdollLoop = nil
+
+btnAntiRagdoll.MouseButton1Click:Connect(function()
+    isAntiRagdollActive = not isAntiRagdollActive
+    if isAntiRagdollActive then
+        btnAntiRagdoll.Text = "Антирагдолл Вкл"
+        if not stateChangedConnection then
+            stateChangedConnection = humanoid.StateChanged:Connect(onStateChanged)
+        end
+        if not fixRagdollLoop then
+            fixRagdollLoop = coroutine.create(function()
+                while isAntiRagdollActive do
+                    fixRagdoll()
+                    wait(0.1)
+                end
+            end)
+            coroutine.resume(fixRagdollLoop)
+        end
+    else
+        btnAntiRagdoll.Text = "Антирагдолл"
+        if stateChangedConnection then
+            stateChangedConnection:Disconnect()
+            stateChangedConnection = nil
+        end
+        fixRagdollLoop = nil
+    end
+end)
+
+-- ESP (Highlight вокруг HumanoidRootPart, видимый через стены)
+
+local isESPActive = false
+local espHighlights = {}
+
+-- Функция включения ESP
+local function enableESP()
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            if not espHighlights[p] then
+                local highlight = Instance.new("Highlight")
+                highlight.Adornee = p.Character
+                highlight.FillColor = Color3.new(1, 0, 0)
+                highlight.FillTransparency = 0.5
+                highlight.OutlineColor = Color3.new(1, 0, 0)
+                highlight.OutlineTransparency = 0
+                highlight.Parent = p.Character
+                espHighlights[p] = highlight
+            end
+        end
+    end
+end
+
+-- Функция выключения ESP
+local function disableESP()
+    for _, highlight in pairs(espHighlights) do
+        if highlight then
+            highlight:Destroy()
+        end
+    end
+    espHighlights = {}
+end
+
+-- Добавляем подсветку новому персонажу игрока
+local function setupHighlightForPlayer(p)
+    p.CharacterAdded:Connect(function(char)
+        if isESPActive then
+            -- Удаляем старый highlight, если есть
+            if espHighlights[p] then
+                espHighlights[p]:Destroy()
+                espHighlights[p] = nil
+            end
+            -- Создаем новый
+            local highlight = Instance.new("Highlight")
+            highlight.Adornee = char
+            highlight.FillColor = Color3.new(1, 0, 0)
+            highlight.FillTransparency = 0.5
+            highlight.OutlineColor = Color3.new(1, 0, 0)
+            highlight.OutlineTransparency = 0
+            highlight.Parent = char
+            espHighlights[p] = highlight
+        end
+    end)
+    -- Если персонаж уже есть (редкий случай)
+    if isESPActive and p.Character then
+        if espHighlights[p] then
+            espHighlights[p]:Destroy()
+            espHighlights[p] = nil
+        end
+        local highlight = Instance.new("Highlight")
+        highlight.Adornee = p.Character
+        highlight.FillColor = Color3.new(1, 0, 0)
+        highlight.FillTransparency = 0.5
+        highlight.OutlineColor = Color3.new(1, 0, 0)
+        highlight.OutlineTransparency = 0
+        highlight.Parent = p.Character
+        espHighlights[p] = highlight
+    end
+end
+
+-- Отслеживаем новых игроков, чтобы добавить им Highlight
+Players.PlayerAdded:Connect(function(p)
+    if p ~= player then
+        setupHighlightForPlayer(p)
+    end
+end)
+
+-- Отслеживаем уход игроков, чтобы удалить их Highlight
+Players.PlayerRemoving:Connect(function(p)
+    if espHighlights[p] then
+        espHighlights[p]:Destroy()
+        espHighlights[p] = nil
+    end
+end)
+
+-- Следим за сменой персонажа локального игрока и отключаем ESP при смерти
+local function onCharacterAdded(char)
+    local humanoid = char:WaitForChild("Humanoid")
+    humanoid.Died:Connect(function()
+        if isESPActive then
+            isESPActive = false
+            btnESP.Text = "ESP"
+            disableESP()
+        end
+    end)
+end
+
+if player.Character then
+    onCharacterAdded(player.Character)
+end
+
+player.CharacterAdded:Connect(onCharacterAdded)
+
+-- Подключаем уже существующих игроков (для локального игрока)
+for _, p in pairs(Players:GetPlayers()) do
+    if p ~= player then
+        setupHighlightForPlayer(p)
+    end
+end
+
+-- Обработка клика по кнопке ESP
+btnESP.MouseButton1Click:Connect(function()
+    isESPActive = not isESPActive
+    if isESPActive then
+        btnESP.Text = "ESP Вкл"
+        enableESP()
+    else
+        btnESP.Text = "ESP"
+        disableESP()
+    end
+end)
