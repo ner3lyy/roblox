@@ -1128,26 +1128,10 @@ local reanimate=function()
 						pdloadedtime=nil
 					end
 					insGet(newc,"BreakJoints")(newc)
-                                        local h=FindFirstChildOfClass(newc,"Humanoid")
-                                        if h then
-                                            insGet(h,"SetStateEnabled")(h,e.HumanoidStateType.Dead,false)
-                                            insSet(h,"Health",insGet(h,"MaxHealth"))
-                                        end
-					elseif breakjointsmethod==1 then
-						insGet(newc,"BreakJoints")(newc)
-						local h=FindFirstChildOfClass(newc,"Humanoid")
-						if h then
-							insSet(h,"Health",0)
-						end
-					elseif breakjointsmethod==2 then
-						local h=FindFirstChildOfClass(newc,"Humanoid")
-						if h then
-							insSet(h,"Health",0)
-						else
-							insGet(newc,"BreakJoints")(newc)
-						end
-					else
-						insGet(newc,"BreakJoints")(newc)
+					local h=FindFirstChildOfClass(newc,"Humanoid")
+					if h then
+						insGet(h,"SetStateEnabled")(h,e.HumanoidStateType.Dead,false)
+						insSet(h,"Health",insGet(h,"MaxHealth"))
 					end
 					cons.ondes=Connect(insGet(newc,"DescendantAdded"),ondes)
 					for i,v in next,QueryDescendants(newc,"Attachment") do
